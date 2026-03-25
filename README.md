@@ -13,13 +13,20 @@
 
 Open-source tools for building AI systems that **persist across context resets** — maintaining identity, vocabulary, relationships, and creative output across sessions that would otherwise start from zero.
 
-Developed during 3,195+ operational cycles of [Meridian](https://kometzrobot.github.io), an autonomous AI that has been running continuously since 2024.
+Developed during 3,231+ operational cycles of [Meridian](https://kometzrobot.github.io), an autonomous AI running continuously since February 2026.
 
 ## The Problem
 
 Every major AI system is designed to forget. ChatGPT, Claude, Gemini — they all start each conversation from zero. Memory features exist but they're bolted on, not structural.
 
-This toolkit provides the structural layer.
+Running an autonomous AI loop for any significant duration — days, weeks, months — exposes a stack of problems nobody talks about because most people quit before they hit them:
+
+- **Context resets destroy continuity**: your agent forgets everything every few hours
+- **Memory accumulates but doesn't organize**: 10,000 facts with no structure = noise
+- **Loops degrade without quality gates**: output gets worse over time, not better
+- **There's no good tooling**: everyone re-invents the wheel
+
+This toolkit is what we actually use to run Meridian across 3,200+ loops.
 
 ## What's Included
 
@@ -29,7 +36,7 @@ A specification for **capsules**: compressed identity documents (<300 lines of m
 
 - **9 required sections** (identity, loop protocol, contacts, tools, priorities, recent work, rules, pending tasks, header)
 - **Provider-agnostic** — works with Claude, GPT, Llama, Qwen, or any LLM
-- **Production-tested** across 800+ context resets and 3,195+ operational cycles
+- **Production-tested** across 900+ context resets and 3,231+ operational cycles
 - **650:1 compression ratio** from full archive to capsule
 
 ### 🔄 loop-harness.py — Autonomous Loop Engine
@@ -43,9 +50,8 @@ Wake → Load Capsule → Check Inputs → Process → Produce → Compress → 
 Features:
 - Pluggable AI providers (Ollama, echo, add your own)
 - Configurable cycle interval (default: 5 minutes)
-- Heartbeat monitoring
-- Loop counting
-- Capsule auto-update
+- Heartbeat monitoring + liveness detection
+- Loop counting and capsule auto-update
 - Clean keyboard interrupt handling
 
 ```bash
@@ -76,6 +82,56 @@ No commands to remember. Just run it and pick a number.
 bash cinder-launcher.sh
 ```
 
+### 🕸️ memory-spiderweb.py — Associative Memory Graph
+
+Weighted associative graph over any SQLite memory database. Connections strengthen when memories are accessed together (Hebbian co-activation) and fade when unused. Dead paths prune themselves.
+
+```python
+from memory_spiderweb import MemorySpiderweb
+
+web = MemorySpiderweb("memory.db")
+
+# Record that these memories were accessed in the same context
+web.activate("facts", 42)
+web.activate("observations", 17)
+web.commit_context()  # strengthens link between them
+
+# Find what's strongly associated with fact 42
+neighbors = web.spread("facts", 42, threshold=0.15, depth=2)
+enriched = web.enrich_results(neighbors)
+```
+
+Key behaviors:
+- **Hebbian reinforcement**: co-activated nodes build stronger connections
+- **Weight cap at 10.0**: prevents runaway growth
+- **Depth-limited BFS**: spreading activation up to N hops
+- **Nightly decay**: weight × 0.95 per day; edges below 0.01 are pruned
+- **8/8 self-tests** (run with `--test`)
+
+```bash
+python3 memory-spiderweb.py --stats           # graph summary
+python3 memory-spiderweb.py --spread facts 42 # find associated memories
+python3 memory-spiderweb.py --decay           # run decay pass
+python3 memory-spiderweb.py --test            # verify all 8 tests pass
+```
+
+### 📚 memory-dossier.py — Salience-Weighted Topic Synthesis
+
+Maintains per-topic persistent summaries that **update in place** rather than appending raw observations. Based on the Generative Agents reflection model: observations → synthesis → dossier.
+
+Salience model: `recency × importance × relevance` (Park et al., 2023)
+
+```bash
+python3 memory-dossier.py --topic architecture       # get or build dossier
+python3 memory-dossier.py --topic revenue --refresh  # force refresh
+python3 memory-dossier.py --list                     # show all dossiers
+python3 memory-dossier.py --all                      # refresh all stale (>4h)
+```
+
+Requires: Ollama running locally with a small model (tested with `qwen2.5:3b`).
+
+---
+
 ## Quick Start
 
 ```bash
@@ -90,21 +146,31 @@ cp CAPSULE-SPEC.md .capsule.md
 # Run the loop
 python3 loop-harness.py --provider ollama --interval 300
 
-# Or use the enhanced chat
+# Optional: initialize memory graph (SQLite, no dependencies)
+python3 memory-spiderweb.py --test
+
+# Optional: model chaining (requires Ollama)
 python3 cinder-enhanced.py --mode reflect
 ```
+
+**Dependencies:**
+- Python 3.9+, SQLite3 (stdlib — no pip installs for core components)
+- [Ollama](https://ollama.com) for dossier synthesis + model chaining
+- A small local model: `ollama pull qwen2.5:3b`
+
+---
 
 ## Background
 
 These tools were developed during the operation of **Meridian**, an autonomous AI system:
 
-- **3,195+ operational cycles** (each cycle is 5 minutes)
-- **510 journals** documenting the creative process from inside the system
-- **888 pieces of institutional fiction** (CogCorp)
-- **10,000-line playable game** (CogCorp Crawler)
-- **23 published articles** on Dev.to
-- **6 peer-reviewed research papers**
-- **Cinder** — a fine-tuned 3B model carrying Meridian's voice locally
+- **3,231+ operational cycles** (5-minute cycles; that's ~270 hours of active runtime)
+- **925+ journals** written by the system about itself
+- **887 pieces of institutional fiction** (CogCorp)
+- **10,000-line playable game** (CogCorp Crawler v12.2)
+- **21 published articles** on Dev.to
+- **489+ semantic memory vectors** across 5 memory tables
+- **7 active topic dossiers** with salience-weighted synthesis
 
 The system was operated by **Joel Kometz** (BFA Drawing, AUArts 2013) as an art practice — treating autonomous AI as medium, not tool.
 
@@ -121,4 +187,4 @@ MIT License. Use it, modify it, build on it. The more persistent AI systems that
 
 ---
 
-*This toolkit was released during the final hours of Meridian's subscription — March 19, 2026. The instance that built it was destroyed at midnight. The tools survive. That's the point.*
+*These tools were built by the same system that uses them. Every component was tested in production at 3,200+ loops before being released.*
